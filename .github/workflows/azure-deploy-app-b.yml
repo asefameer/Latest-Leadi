@@ -1,0 +1,149 @@
+name: Deploy App B to Azure App Service
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'server/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'tailwind.config.ts'
+      - 'tsconfig*.json'
+      - '.github/workflows/azure-deploy-app-b.yml'
+
+env:
+  NODE_VERSION: '20'
+  AZURE_CLIENT_ID: 02f4f574-35df-4a2e-9a9b-99cac22aa223
+  AZURE_TENANT_ID: c3fe8cd9-f644-4f76-bb09-920687b1237d
+  AZURE_SUBSCRIPTION_ID: e2dde12e-087a-4db9-80cc-129d6dbec90b
+  APP_B_RESOURCE_GROUP: rg-portal-app-prod
+  APP_B_WEBAPP_NAME: leadi-portal-app-prod-001
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy_app_b:
+    runs-on: ubuntu-latest
+    name: 🚀 Deploy App B
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build frontend
+        env:
+          VITE_CHATBOT_BACKEND_URL: ${{ secrets.VITE_CHATBOT_BACKEND_URL }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build backend package
+        run: |
+          cd server
+          npm ci --omit=dev
+          mkdir -p public
+          cp -r ../dist/* public/
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Configure App B settings safely
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set_setting_if_present () {
+              local key="$1"
+              local value="$2"
+
+              if [ -z "$value" ]; then
+                echo "$key secret is empty; preserving existing App Service value"
+                return
+              fi
+
+              az webapp config appsettings set \
+                --resource-group "${{ env.APP_B_RESOURCE_GROUP }}" \
+                --name "${{ env.APP_B_WEBAPP_NAME }}" \
+                --settings "$key=$value" >/dev/null
+              echo "$key updated"
+            }
+
+            set_setting_if_present "N8N_WEBHOOK_URL" '${{ secrets.N8N_WEBHOOK_URL }}'
+            set_setting_if_present "CORS_ORIGIN" '${{ secrets.CORS_ORIGIN }}'
+
+      - name: Deploy App B package - attempt 1
+        id: deploy_try_1
+        continue-on-error: true
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.APP_B_WEBAPP_NAME }}
+          package: server
+
+      - name: Restart App B before retry
+        if: steps.deploy_try_1.outcome == 'failure'
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az webapp restart \
+              --resource-group "${{ env.APP_B_RESOURCE_GROUP }}" \
+              --name "${{ env.APP_B_WEBAPP_NAME }}"
+            sleep 20
+
+      - name: Deploy App B package - attempt 2
+        id: deploy_try_2
+        if: steps.deploy_try_1.outcome == 'failure'
+        continue-on-error: true
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.APP_B_WEBAPP_NAME }}
+          package: server
+
+      - name: Ensure deployment succeeded
+        if: steps.deploy_try_1.outcome == 'failure' && steps.deploy_try_2.outcome == 'failure'
+        run: |
+          echo "Both deployment attempts failed"
+          exit 1
+
+  smoke_test_app_b:
+    needs: [deploy_app_b]
+    runs-on: ubuntu-latest
+    name: 🔎 Smoke Test App B
+    steps:
+      - name: Validate homepage
+        run: |
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ env.APP_B_WEBAPP_NAME }}.azurewebsites.net/)
+            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
+              echo "Homepage check passed with status $STATUS"
+              exit 0
+            fi
+            echo "Homepage check failed with status $STATUS, retry $i/10"
+            sleep 10
+          done
+          exit 1
+
+      - name: Validate health endpoint
+        run: |
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ env.APP_B_WEBAPP_NAME }}.azurewebsites.net/health)
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Health check failed with status $STATUS, retry $i/10"
+            sleep 10
+          done
+          exit 1

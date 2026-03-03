@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import { chatLimiter } from "./middleware.js";
 import { addMessage, getMessageHistory, closeDb } from "./db.js";
 
@@ -9,6 +11,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const publicDir = path.resolve(__dirname, "../public");
 
 if (!N8N_WEBHOOK_URL) {
   console.error("ERROR: N8N_WEBHOOK_URL is not set in environment variables");
@@ -18,6 +23,7 @@ if (!N8N_WEBHOOK_URL) {
 // Middleware
 app.use(express.json());
 app.use(cors());
+app.use(express.static(publicDir));
 
 // Health check
 app.get("/health", (req, res) => {
@@ -80,6 +86,14 @@ app.get("/api/chat/history/:userId", (req, res) => {
     console.error("Error fetching history:", err);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api") || req.path === "/health") {
+    return next();
+  }
+
+  return res.sendFile(path.join(publicDir, "index.html"));
 });
 
 app.listen(PORT, () => {
