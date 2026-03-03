@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Trophy, Eye, EyeOff } from "lucide-react";
-import { useState as useStateExtra } from "react";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -49,8 +48,8 @@ const Login = () => {
         {/* Login Card */}
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader className="space-y-2">
-            <CardTitle className="text-white">Admin Login</CardTitle>
-            <CardDescription>Enter your credentials to manage the leaderboard</CardDescription>
+            <CardTitle className="text-white">Login</CardTitle>
+            <CardDescription>Sign in to access your dashboard</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLeaderboard } from "@/context/LeaderboardContext";
 import { useAuth } from "@/context/AuthContext";
 import { TSOData } from "@/types/leaderboard";
@@ -24,6 +24,17 @@ const AdminPanel = () => {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [uploadingImageId, setUploadingImageId] = useState<string | null>(null);
+  const [authEvents, setAuthEvents] = useState<Array<{
+    id: number;
+    userId: number | null;
+    email: string | null;
+    eventType: string;
+    ipAddress: string | null;
+    userAgent: string | null;
+    createdAt: string;
+    role?: string | null;
+  }>>([]);
+  const [loadingAuthEvents, setLoadingAuthEvents] = useState(false);
 
   const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -116,11 +127,43 @@ const AdminPanel = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
     toast.success("Logged out successfully");
   };
+
+  useEffect(() => {
+    const fetchAuthEvents = async () => {
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        return;
+      }
+
+      setLoadingAuthEvents(true);
+      try {
+        const backendUrl = import.meta.env.VITE_CHATBOT_BACKEND_URL || "";
+        const response = await fetch(`${backendUrl}/api/admin/auth-events?limit=100`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to load auth events");
+        }
+
+        const data = await response.json();
+        setAuthEvents(data.events || []);
+      } catch (error) {
+        toast.error("Could not load login/signup activity");
+      } finally {
+        setLoadingAuthEvents(false);
+      }
+    };
+
+    fetchAuthEvents();
+  }, []);
 
   // Sort by overall percent
   const sortedTsoData = [...tsoData].sort((a, b) => b.overallPercent - a.overallPercent);
@@ -201,6 +244,39 @@ const AdminPanel = () => {
                 Download Template
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border mb-8">
+          <CardHeader>
+            <CardTitle className="text-white">User Signup/Login Activity</CardTitle>
+            <CardDescription>Latest authentication events across all users</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingAuthEvents ? (
+              <p className="text-sm text-muted-foreground">Loading activity...</p>
+            ) : authEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No authentication activity yet.</p>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {authEvents.map((event) => (
+                  <div
+                    key={event.id}
+                    className="flex flex-col gap-1 rounded-md border border-border p-3 text-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-foreground">{event.eventType}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(event.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-muted-foreground">Email: {event.email || "N/A"}</p>
+                    <p className="text-muted-foreground">Role: {event.role || "N/A"}</p>
+                    <p className="text-muted-foreground">IP: {event.ipAddress || "N/A"}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 

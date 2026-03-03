@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Trophy, Eye, EyeOff } from "lucide-react";
-import { useState as useStateExtra } from "react";
 
 const Signup = () => {
   const [email, setEmail] = useState("");

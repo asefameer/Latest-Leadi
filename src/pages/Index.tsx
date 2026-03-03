@@ -9,8 +9,8 @@ const Index = () => {
   const { isAuthenticated, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
     toast.success("Logged out successfully");
   };
