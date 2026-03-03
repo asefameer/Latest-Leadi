@@ -20,10 +20,22 @@ import aktLogo from "@/assets/akt-logo.png";
 import { parseCSV, downloadCSVTemplate } from "@/lib/csvParser";
 
 const AdminPanel = () => {
-  const { tsoData, setTsoData, logo, setLogo, backgroundMedia, setBackgroundMedia, backgroundMediaType, setBackgroundMediaType } = useLeaderboard();
+  const {
+    tsoData,
+    setTsoData,
+    logo,
+    setLogo,
+    backgroundMedia,
+    setBackgroundMedia,
+    backgroundMediaType,
+    setBackgroundMediaType,
+    siteCopy,
+    setSiteCopy,
+  } = useLeaderboard();
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [uploadingImageId, setUploadingImageId] = useState<string | null>(null);
+  const backendUrl = import.meta.env.VITE_CHATBOT_BACKEND_URL || "";
   const [authEvents, setAuthEvents] = useState<Array<{
     id: number;
     userId: number | null;
@@ -36,71 +48,156 @@ const AdminPanel = () => {
   }>>([]);
   const [loadingAuthEvents, setLoadingAuthEvents] = useState(false);
 
-  const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const getAuthToken = () => localStorage.getItem("auth_token");
+
+  const uploadAsset = async (file: File) => {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error("Authentication required");
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`${backendUrl}/api/admin/content/upload`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error("Upload failed");
+    }
+
+    const data = await response.json();
+    return data.asset as { storageUrl: string };
+  };
+
+  const saveSettings = async (settings: Record<string, string>) => {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error("Authentication required");
+    }
+
+    const response = await fetch(`${backendUrl}/api/admin/content/settings`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ settings }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to save settings");
+    }
+  };
+
+  const saveTsoData = async (nextTsoData: TSOData[]) => {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error("Authentication required");
+    }
+
+    const response = await fetch(`${backendUrl}/api/admin/content/tso`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ tsoData: nextTsoData }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to save leaderboard data");
+    }
+  };
+
+  const saveSiteCopy = async (nextSiteCopy: Record<string, string>) => {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error("Authentication required");
+    }
+
+    const response = await fetch(`${backendUrl}/api/admin/content/site-copy`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ siteCopy: nextSiteCopy }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to save site text");
+    }
+  };
+
+  const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const csvText = event.target?.result as string;
-        const parsedData = parseCSV(csvText);
-        setTsoData(parsedData);
-        toast.success(`Successfully imported ${parsedData.length} TSOs from CSV`);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to parse CSV");
-      }
-    };
-    reader.readAsText(file);
+    try {
+      await uploadAsset(file);
+
+      const csvText = await file.text();
+      const parsedData = parseCSV(csvText);
+      setTsoData(parsedData);
+      await saveTsoData(parsedData);
+      toast.success(`Successfully imported ${parsedData.length} TSOs from CSV`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to parse/upload CSV");
+    }
   };
 
-  const handleImageUpload = (tsoId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (tsoId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadingImageId(tsoId);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const imageData = event.target?.result as string;
-        const updatedTsoData = tsoData.map((tso) =>
-          tso.id === tsoId ? { ...tso, avatar: imageData } : tso
-        );
-        setTsoData(updatedTsoData);
-        toast.success("Image uploaded successfully");
-      } catch (error) {
-        toast.error("Failed to upload image");
-      } finally {
-        setUploadingImageId(null);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const asset = await uploadAsset(file);
+      const updatedTsoData = tsoData.map((tso) =>
+        tso.id === tsoId ? { ...tso, avatar: asset.storageUrl } : tso
+      );
+      setTsoData(updatedTsoData);
+      await saveTsoData(updatedTsoData);
+      toast.success("Image uploaded successfully");
+    } catch (error) {
+      toast.error("Failed to upload image");
+    } finally {
+      setUploadingImageId(null);
+    }
   };
 
-  const handleDeleteTSO = (id: string) => {
+  const handleDeleteTSO = async (id: string) => {
     const updated = tsoData.filter((tso) => tso.id !== id);
     setTsoData(updated);
-    toast.success("TSO deleted successfully");
+    try {
+      await saveTsoData(updated);
+      toast.success("TSO deleted successfully");
+    } catch (error) {
+      toast.error("Failed to persist TSO deletion");
+    }
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const logoData = event.target?.result as string;
-        setLogo(logoData);
-        toast.success("Logo uploaded successfully");
-      } catch (error) {
-        toast.error("Failed to upload logo");
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const asset = await uploadAsset(file);
+      setLogo(asset.storageUrl);
+      await saveSettings({ logoUrl: asset.storageUrl });
+      toast.success("Logo uploaded successfully");
+    } catch (error) {
+      toast.error("Failed to upload logo");
+    }
   };
 
-  const handleBackgroundMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBackgroundMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -113,18 +210,32 @@ const AdminPanel = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const mediaData = event.target?.result as string;
-        setBackgroundMedia(mediaData);
-        setBackgroundMediaType(isVideo ? "video" : "image");
-        toast.success(`Background ${isVideo ? "video" : "image"} uploaded successfully`);
-      } catch (error) {
-        toast.error("Failed to upload background media");
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const asset = await uploadAsset(file);
+      const mediaType = isVideo ? "video" : "image";
+      setBackgroundMedia(asset.storageUrl);
+      setBackgroundMediaType(mediaType);
+      await saveSettings({
+        backgroundMediaUrl: asset.storageUrl,
+        backgroundMediaType: mediaType,
+      });
+      toast.success(`Background ${mediaType} uploaded successfully`);
+    } catch (error) {
+      toast.error("Failed to upload background media");
+    }
+  };
+
+  const handleSiteCopyField = (key: string, value: string) => {
+    setSiteCopy((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSaveSiteCopy = async () => {
+    try {
+      await saveSiteCopy(siteCopy);
+      toast.success("Frontend text updated");
+    } catch (error) {
+      toast.error("Failed to update frontend text");
+    }
   };
 
   const handleLogout = async () => {
@@ -366,6 +477,56 @@ const AdminPanel = () => {
                 Current background: {backgroundMediaType === "video" ? "Video" : "Image"}
               </p>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border mb-8">
+          <CardHeader>
+            <CardTitle className="text-white">Frontend Text Editor</CardTitle>
+            <CardDescription>Update visible text for normal users</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="company-line">Company Line</Label>
+              <Input
+                id="company-line"
+                value={siteCopy.companyLine || ""}
+                onChange={(e) => handleSiteCopyField("companyLine", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="week-badge">Week Badge</Label>
+              <Input
+                id="week-badge"
+                value={siteCopy.weekBadge || ""}
+                onChange={(e) => handleSiteCopyField("weekBadge", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="main-title">Main Title</Label>
+              <Input
+                id="main-title"
+                value={siteCopy.mainTitle || ""}
+                onChange={(e) => handleSiteCopyField("mainTitle", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subtitle">Subtitle</Label>
+              <Input
+                id="subtitle"
+                value={siteCopy.subtitle || ""}
+                onChange={(e) => handleSiteCopyField("subtitle", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="footer">Footer</Label>
+              <Input
+                id="footer"
+                value={siteCopy.footer || ""}
+                onChange={(e) => handleSiteCopyField("footer", e.target.value)}
+              />
+            </div>
+            <Button onClick={handleSaveSiteCopy}>Save Text Changes</Button>
           </CardContent>
         </Card>
 

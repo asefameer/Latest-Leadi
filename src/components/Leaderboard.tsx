@@ -4,7 +4,7 @@ import { useLeaderboard } from "@/context/LeaderboardContext";
 import aktLogo from "@/assets/akt-logo.png";
 
 const Leaderboard = () => {
-  const { tsoData, config, logo, backgroundMedia, backgroundMediaType } = useLeaderboard();
+  const { tsoData, config, logo, backgroundMedia, backgroundMediaType, siteCopy } = useLeaderboard();
 
   // Sort by Overall % and get top 10
   const sortedData = [...tsoData].sort((a, b) => b.overallPercent - a.overallPercent).slice(0, 10);
@@ -51,19 +51,19 @@ const Leaderboard = () => {
 
             {/* Company Name */}
             <p className="text-muted-foreground text-sm tracking-widest uppercase mb-4">
-              X Factor Unlocked
+              {siteCopy.companyLine || "X Factor Unlocked"}
             </p>
             
             {/* Week Badge */}
             <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-primary/5 border border-primary/10">
-              <span className="text-primary font-medium text-sm">Week 3 Rankings</span>
+              <span className="text-primary font-medium text-sm">{siteCopy.weekBadge || "Week 3 Rankings"}</span>
             </div>
 
             <h1 className="font-display text-4xl md:text-6xl font-semibold mb-4 tracking-tight text-foreground">
-              XForce Leaderboard
+              {siteCopy.mainTitle || "XForce Leaderboard"}
             </h1>
             <p className="text-muted-foreground text-lg max-w-md mx-auto">
-              Compete with Sales Stars nationally and climb the ranks
+              {siteCopy.subtitle || "Compete with Sales Stars nationally and climb the ranks"}
             </p>
           </div>
 
@@ -118,7 +118,7 @@ const Leaderboard = () => {
       {/* Footer */}
       <footer className="container pb-8">
         <div className="text-center text-muted-foreground text-sm">
-          © {new Date().getFullYear()} Shah Cement. All rights reserved.
+          {siteCopy.footer || `© ${new Date().getFullYear()} Shah Cement. All rights reserved.`}
         </div>
       </footer>
     </div>

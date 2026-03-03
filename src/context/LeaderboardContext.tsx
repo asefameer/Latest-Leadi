@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { TSOData, LeaderboardConfig } from "@/types/leaderboard";
 
 // Sample initial data with Bangladeshi names and territories
@@ -206,6 +206,8 @@ interface LeaderboardContextType {
   setBackgroundMedia: React.Dispatch<React.SetStateAction<string>>;
   backgroundMediaType: "image" | "video"; // Type of background media
   setBackgroundMediaType: React.Dispatch<React.SetStateAction<"image" | "video">>;
+  siteCopy: Record<string, string>;
+  setSiteCopy: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   updateTSO: (id: string, data: Partial<TSOData>) => void;
   addTSO: (data: Omit<TSOData, "id">) => void;
   deleteTSO: (id: string) => void;
@@ -219,6 +221,51 @@ export const LeaderboardProvider = ({ children }: { children: ReactNode }) => {
   const [logo, setLogo] = useState<string>("");
   const [backgroundMedia, setBackgroundMedia] = useState<string>("");
   const [backgroundMediaType, setBackgroundMediaType] = useState<"image" | "video">("image");
+  const [siteCopy, setSiteCopy] = useState<Record<string, string>>({
+    companyLine: "X Factor Unlocked",
+    weekBadge: "Week 3 Rankings",
+    mainTitle: "XForce Leaderboard",
+    subtitle: "Compete with Sales Stars nationally and climb the ranks",
+    footer: `© ${new Date().getFullYear()} Shah Cement. All rights reserved.`,
+  });
+
+  useEffect(() => {
+    const loadPublicContent = async () => {
+      try {
+        const backendUrl = import.meta.env.VITE_CHATBOT_BACKEND_URL || "";
+        const response = await fetch(`${backendUrl}/api/content/public`);
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+
+        if (Array.isArray(data.tsoData) && data.tsoData.length > 0) {
+          setTsoData(data.tsoData);
+        }
+
+        if (data.settings?.logoUrl) {
+          setLogo(data.settings.logoUrl);
+        }
+
+        if (data.settings?.backgroundMediaUrl) {
+          setBackgroundMedia(data.settings.backgroundMediaUrl);
+        }
+
+        if (data.settings?.backgroundMediaType === "image" || data.settings?.backgroundMediaType === "video") {
+          setBackgroundMediaType(data.settings.backgroundMediaType);
+        }
+
+        if (data.siteCopy && typeof data.siteCopy === "object") {
+          setSiteCopy((prev) => ({ ...prev, ...data.siteCopy }));
+        }
+      } catch (_error) {
+        // Keep local defaults when API is unavailable
+      }
+    };
+
+    loadPublicContent();
+  }, []);
 
   const updateTSO = (id: string, data: Partial<TSOData>) => {
     setTsoData((prev) =>
@@ -251,6 +298,8 @@ export const LeaderboardProvider = ({ children }: { children: ReactNode }) => {
         setBackgroundMedia,
         backgroundMediaType,
         setBackgroundMediaType,
+        siteCopy,
+        setSiteCopy,
         updateTSO,
         addTSO,
         deleteTSO,

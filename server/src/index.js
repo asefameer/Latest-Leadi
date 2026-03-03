@@ -2,7 +2,9 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
+import multer from "multer";
 import { chatLimiter } from "./middleware.js";
 import {
   addMessage,
@@ -18,6 +20,14 @@ import {
   recordAuthEvent,
   listAuthEvents,
   validateBdPhone,
+  listContentSettings,
+  setContentSettings,
+  replaceLeaderboardRecords,
+  listLeaderboardRecords,
+  upsertSiteCopy,
+  listSiteCopy,
+  addMediaAsset,
+  listMediaAssets,
 } from "./db.js";
 
 dotenv.config();
@@ -28,6 +38,28 @@ const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.resolve(__dirname, "../public");
+const uploadRoot = process.env.CONTENT_UPLOAD_DIR || "/home/site/uploads";
+
+if (!fs.existsSync(uploadRoot)) {
+  fs.mkdirSync(uploadRoot, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadRoot);
+  },
+  filename: (_req, file, cb) => {
+    const safeBase = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    cb(null, `${Date.now()}-${safeBase}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024,
+  },
+});
 
 if (!N8N_WEBHOOK_URL) {
   console.warn("WARN: N8N_WEBHOOK_URL is not set; chatbot endpoint is temporarily disabled");
@@ -37,6 +69,7 @@ if (!N8N_WEBHOOK_URL) {
 app.use(express.json());
 app.use(cors());
 app.use(express.static(publicDir));
+app.use("/uploads", express.static(uploadRoot));
 
 const toSafeUser = (user) => ({
   id: String(user.id),
@@ -199,6 +232,100 @@ app.get("/api/admin/auth-events", requireAuth, requireAdmin, (req, res) => {
 
   const events = listAuthEvents(limit);
   return res.json({ events });
+});
+
+app.get("/api/content/public", (_req, res) => {
+  const settings = listContentSettings();
+  const tsoData = listLeaderboardRecords();
+  const siteCopy = listSiteCopy();
+
+  return res.json({
+    settings,
+    tsoData,
+    siteCopy,
+  });
+});
+
+app.put("/api/admin/content/settings", requireAuth, requireAdmin, (req, res) => {
+  const { settings } = req.body;
+
+  if (!settings || typeof settings !== "object") {
+    return res.status(400).json({ error: "settings object is required" });
+  }
+
+  setContentSettings(settings, req.user.id);
+  return res.json({ success: true });
+});
+
+app.put("/api/admin/content/tso", requireAuth, requireAdmin, (req, res) => {
+  const { tsoData } = req.body;
+
+  if (!Array.isArray(tsoData)) {
+    return res.status(400).json({ error: "tsoData array is required" });
+  }
+
+  replaceLeaderboardRecords(tsoData);
+  return res.json({ success: true, count: tsoData.length });
+});
+
+app.get("/api/admin/content/assets", requireAuth, requireAdmin, (req, res) => {
+  const limitRaw = Number.parseInt(req.query.limit, 10);
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 1000) : 200;
+  const assets = listMediaAssets(limit);
+  return res.json({ assets });
+});
+
+app.post("/api/admin/content/upload", requireAuth, requireAdmin, upload.single("file"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
+
+  let assetType = "file";
+  if (req.file.mimetype.startsWith("image/")) {
+    assetType = "image";
+  } else if (req.file.mimetype.startsWith("video/")) {
+    assetType = "video";
+  } else if (req.file.mimetype === "text/csv" || req.file.originalname.toLowerCase().endsWith(".csv")) {
+    assetType = "csv";
+  }
+
+  const storageUrl = `/uploads/${req.file.filename}`;
+
+  const assetId = addMediaAsset({
+    assetType,
+    fileName: req.file.originalname,
+    mimeType: req.file.mimetype,
+    fileSize: req.file.size,
+    storageUrl,
+    uploadedBy: req.user.id,
+  });
+
+  return res.status(201).json({
+    asset: {
+      id: assetId,
+      assetType,
+      fileName: req.file.originalname,
+      mimeType: req.file.mimetype,
+      fileSize: req.file.size,
+      storageUrl,
+    },
+  });
+});
+
+app.get("/api/content/site-copy", (_req, res) => {
+  const siteCopy = listSiteCopy();
+  return res.json({ siteCopy });
+});
+
+app.put("/api/admin/content/site-copy", requireAuth, requireAdmin, (req, res) => {
+  const { siteCopy } = req.body;
+
+  if (!siteCopy || typeof siteCopy !== "object") {
+    return res.status(400).json({ error: "siteCopy object is required" });
+  }
+
+  upsertSiteCopy(siteCopy, req.user.id);
+  return res.json({ success: true });
 });
 
 // Health check

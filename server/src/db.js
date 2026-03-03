@@ -50,6 +50,39 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_auth_events_created_at ON auth_events(created_at);
+
+  CREATE TABLE IF NOT EXISTS content_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_by INTEGER,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS media_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_type TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    mime_type TEXT,
+    file_size INTEGER,
+    storage_url TEXT NOT NULL,
+    uploaded_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS site_copy (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_by INTEGER,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS leaderboard_records (
+    id TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_media_assets_created_at ON media_assets(created_at);
 `);
 
 const normalizePhone = (phone) => phone.replace(/\s/g, "");
@@ -162,6 +195,118 @@ export function listAuthEvents(limit = 200) {
     ORDER BY ae.created_at DESC
     LIMIT ?
   `);
+  return stmt.all(limit);
+}
+
+export function listContentSettings() {
+  const stmt = db.prepare("SELECT key, value FROM content_settings");
+  const rows = stmt.all();
+  return rows.reduce((acc, row) => {
+    acc[row.key] = row.value;
+    return acc;
+  }, {});
+}
+
+export function setContentSettings(settings = {}, updatedBy = null) {
+  const upsertStmt = db.prepare(`
+    INSERT INTO content_settings (key, value, updated_by, updated_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_by = excluded.updated_by,
+      updated_at = datetime('now')
+  `);
+
+  const transaction = db.transaction((entries) => {
+    for (const [key, value] of entries) {
+      upsertStmt.run(key, String(value), updatedBy);
+    }
+  });
+
+  transaction(Object.entries(settings));
+}
+
+export function replaceLeaderboardRecords(records = []) {
+  const clearStmt = db.prepare("DELETE FROM leaderboard_records");
+  const insertStmt = db.prepare(
+    "INSERT INTO leaderboard_records (id, payload, updated_at) VALUES (?, ?, datetime('now'))"
+  );
+
+  const transaction = db.transaction((nextRecords) => {
+    clearStmt.run();
+    for (const item of nextRecords) {
+      insertStmt.run(String(item.id), JSON.stringify(item));
+    }
+  });
+
+  transaction(records);
+}
+
+export function listLeaderboardRecords() {
+  const stmt = db.prepare("SELECT payload FROM leaderboard_records ORDER BY updated_at DESC");
+  return stmt.all().map((row) => {
+    try {
+      return JSON.parse(row.payload);
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+export function upsertSiteCopy(entries = {}, updatedBy = null) {
+  const stmt = db.prepare(`
+    INSERT INTO site_copy (key, value, updated_by, updated_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_by = excluded.updated_by,
+      updated_at = datetime('now')
+  `);
+
+  const transaction = db.transaction((items) => {
+    for (const [key, value] of items) {
+      stmt.run(key, String(value ?? ""), updatedBy);
+    }
+  });
+
+  transaction(Object.entries(entries));
+}
+
+export function listSiteCopy() {
+  const stmt = db.prepare("SELECT key, value FROM site_copy");
+  const rows = stmt.all();
+  return rows.reduce((acc, row) => {
+    acc[row.key] = row.value;
+    return acc;
+  }, {});
+}
+
+export function addMediaAsset({ assetType, fileName, mimeType, fileSize, storageUrl, uploadedBy = null }) {
+  const stmt = db.prepare(`
+    INSERT INTO media_assets (asset_type, file_name, mime_type, file_size, storage_url, uploaded_by)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  const result = stmt.run(assetType, fileName, mimeType || null, fileSize || 0, storageUrl, uploadedBy);
+  return result.lastInsertRowid;
+}
+
+export function listMediaAssets(limit = 200) {
+  const stmt = db.prepare(`
+    SELECT
+      id,
+      asset_type as assetType,
+      file_name as fileName,
+      mime_type as mimeType,
+      file_size as fileSize,
+      storage_url as storageUrl,
+      uploaded_by as uploadedBy,
+      created_at as createdAt
+    FROM media_assets
+    ORDER BY created_at DESC
+    LIMIT ?
+  `);
+
   return stmt.all(limit);
 }
 
