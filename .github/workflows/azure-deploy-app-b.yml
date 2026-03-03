@@ -61,22 +61,6 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Validate required runtime config
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            existing_n8n=$(az webapp config appsettings list \
-              --resource-group "${{ env.APP_B_RESOURCE_GROUP }}" \
-              --name "${{ env.APP_B_WEBAPP_NAME }}" \
-              --query "[?name=='N8N_WEBHOOK_URL'].value | [0]" \
-              -o tsv)
-
-            if [ -z "${{ secrets.N8N_WEBHOOK_URL }}" ] && [ -z "$existing_n8n" ]; then
-              echo "::error::N8N_WEBHOOK_URL is missing in both GitHub Secrets and App Service settings."
-              echo "::error::Set repo secret N8N_WEBHOOK_URL or configure it directly in App Service before deploy."
-              exit 1
-            fi
-
       - name: Configure App B settings safely
         uses: azure/cli@v2
         with:

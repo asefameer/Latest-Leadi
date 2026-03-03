@@ -16,8 +16,7 @@ const __dirname = path.dirname(__filename);
 const publicDir = path.resolve(__dirname, "../public");
 
 if (!N8N_WEBHOOK_URL) {
-  console.error("ERROR: N8N_WEBHOOK_URL is not set in environment variables");
-  process.exit(1);
+  console.warn("WARN: N8N_WEBHOOK_URL is not set; chatbot endpoint is temporarily disabled");
 }
 
 // Middleware
@@ -38,6 +37,12 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
 
   if (!userId || !text) {
     return res.status(400).json({ error: "Missing userId or text" });
+  }
+
+  if (!N8N_WEBHOOK_URL) {
+    return res.status(503).json({
+      error: "Chatbot backend is temporarily unavailable",
+    });
   }
 
   try {
