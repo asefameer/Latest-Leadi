@@ -113,6 +113,12 @@ export function getUserByEmail(email) {
   return stmt.get(email.toLowerCase());
 }
 
+export function hasAdminUser() {
+  const stmt = db.prepare("SELECT COUNT(1) as count FROM users WHERE role = 'admin'");
+  const row = stmt.get();
+  return Number(row?.count || 0) > 0;
+}
+
 export function getUserById(userId) {
   const stmt = db.prepare("SELECT id, email, phone, role, created_at FROM users WHERE id = ?");
   return stmt.get(userId);

@@ -15,6 +15,7 @@ import {
   createSession,
   getSessionWithUser,
   deleteSession,
+  hasAdminUser,
   cleanupExpiredSessions,
   recordAuthEvent,
   listAuthEvents,
@@ -128,11 +129,13 @@ app.post("/api/auth/signup", (req, res) => {
   }
 
   try {
+    const role = hasAdminUser() ? "viewer" : "admin";
+
     const user = createUser({
       email,
       phone,
       password,
-      role: "viewer",
+      role,
     });
 
     const token = createSession(user.id);
