@@ -1,5 +1,5 @@
 name: Deploy App B to Azure App Service
-# trigger-note: app-b pipeline validation
+# trigger-note: app-b pipeline validation v2
 
 on:
   workflow_dispatch:
