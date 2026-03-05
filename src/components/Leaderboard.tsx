@@ -6,8 +6,8 @@ import aktLogo from "@/assets/akt-logo.png";
 const Leaderboard = () => {
   const { tsoData, config, logo, backgroundMedia, backgroundMediaType, siteCopy } = useLeaderboard();
 
-  // Sort by Overall % and get top 10
-  const sortedData = [...tsoData].sort((a, b) => b.overallPercent - a.overallPercent).slice(0, 10);
+  // Sort by Overall % and get top 500
+  const sortedData = [...tsoData].sort((a, b) => b.overallPercent - a.overallPercent).slice(0, 500);
   const topThree = sortedData.slice(0, 3);
   const restOfPlayers = sortedData.slice(3);
 

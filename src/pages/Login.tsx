@@ -116,17 +116,6 @@ const Login = () => {
             </Link>
           </p>
         </div>
-
-        {/* Demo Credentials */}
-        <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-4 space-y-2">
-          <p className="text-sm font-semibold text-slate-300">Demo Account:</p>
-          <p className="text-sm text-slate-400">
-            Email: <span className="font-mono bg-slate-800 px-2 py-1 rounded">admin@topperformers.com</span>
-          </p>
-          <p className="text-sm text-slate-400">
-            Password: <span className="font-mono bg-slate-800 px-2 py-1 rounded">admin123</span>
-          </p>
-        </div>
       </div>
     </div>
   );

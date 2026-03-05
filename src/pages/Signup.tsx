@@ -192,37 +192,6 @@ const Signup = () => {
             </Link>
           </p>
         </div>
-
-        {/* Demo Info */}
-        <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-4 space-y-3">
-          <p className="text-sm font-semibold text-slate-300">Demo Accounts:</p>
-          
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-amber-300">Viewer Account (Read-only):</p>
-            <p className="text-sm text-slate-400">
-              Email: <span className="font-mono bg-slate-800 px-2 py-1 rounded">viewer@topperformers.com</span>
-            </p>
-            <p className="text-sm text-slate-400">
-              Phone: <span className="font-mono bg-slate-800 px-2 py-1 rounded">+8801700000001</span>
-            </p>
-            <p className="text-sm text-slate-400">
-              Password: <span className="font-mono bg-slate-800 px-2 py-1 rounded">viewer123</span>
-            </p>
-          </div>
-
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-orange-300">Admin Account (Editor):</p>
-            <p className="text-sm text-slate-400">
-              Email: <span className="font-mono bg-slate-800 px-2 py-1 rounded">admin@topperformers.com</span>
-            </p>
-            <p className="text-sm text-slate-400">
-              Phone: <span className="font-mono bg-slate-800 px-2 py-1 rounded">+8801700000000</span>
-            </p>
-            <p className="text-sm text-slate-400">
-              Password: <span className="font-mono bg-slate-800 px-2 py-1 rounded">admin123</span>
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );
