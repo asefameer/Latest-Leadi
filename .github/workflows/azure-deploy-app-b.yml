@@ -19,9 +19,9 @@ on:
 
 env:
   NODE_VERSION: '20'
-  AZURE_CLIENT_ID: 02f4f574-35df-4a2e-9a9b-99cac22aa223
-  AZURE_TENANT_ID: c3fe8cd9-f644-4f76-bb09-920687b1237d
-  AZURE_SUBSCRIPTION_ID: e2dde12e-087a-4db9-80cc-129d6dbec90b
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: 3bb447ee-be09-4fd3-9f1c-104fc7776954
+  AZURE_SUBSCRIPTION_ID: fdd05880-48dd-46bd-be4c-36f7039e71d7
   APP_B_RESOURCE_GROUP: rg-portal-app-prod
   APP_B_WEBAPP_NAME: leadi-portal-app-prod-001
 
@@ -63,6 +63,16 @@ jobs:
           client-id: ${{ env.AZURE_CLIENT_ID }}
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate target web app exists
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -e
+            az webapp show \
+              --resource-group "${{ env.APP_B_RESOURCE_GROUP }}" \
+              --name "${{ env.APP_B_WEBAPP_NAME }}" >/dev/null
+            echo "Target web app found"
 
       - name: Configure App B settings safely
         uses: azure/cli@v2

@@ -1,9 +1,6 @@
 name: Build and Deploy to Azure
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 env:
@@ -13,8 +10,15 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      DISABLED_REASON: "Legacy workflow disabled to avoid duplicate deployments; use azure-deploy-app-b.yml"
     
     steps:
+      - name: Stop legacy workflow
+        run: |
+          echo "$DISABLED_REASON"
+          exit 1
+
       - name: Checkout code
         uses: actions/checkout@v4
 
