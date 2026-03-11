@@ -23,7 +23,7 @@ env:
   AZURE_TENANT_ID: 3bb447ee-be09-4fd3-9f1c-104fc7776954
   AZURE_SUBSCRIPTION_ID: fdd05880-48dd-46bd-be4c-36f7039e71d7
   APP_B_RESOURCE_GROUP: rg-portal-app-prod
-  APP_B_WEBAPP_NAME: leadi-portal-app-prod-001
+  APP_B_WEBAPP_NAME: leadi-portal-app-8n7
 
 permissions:
   id-token: write
