@@ -1,5 +1,4 @@
-name: Deploy App B to Azure App Service
-# trigger-note: app-b pipeline with oryx build
+name: Deploy Leaderboard to Azure App Service
 
 on:
   workflow_dispatch:
@@ -22,17 +21,21 @@ env:
   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   AZURE_TENANT_ID: 3bb447ee-be09-4fd3-9f1c-104fc7776954
   AZURE_SUBSCRIPTION_ID: fdd05880-48dd-46bd-be4c-36f7039e71d7
-  APP_B_RESOURCE_GROUP: rg-portal-app-prod
-  APP_B_WEBAPP_NAME: leadi-portal-app-8n7
+  RESOURCE_GROUP: rg-portal-app-prod
+  WEBAPP_NAME: leadi-portal-app-8n7
+
+concurrency:
+  group: leaderboard-deploy-main
+  cancel-in-progress: true
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  deploy_app_b:
+  deploy:
     runs-on: ubuntu-latest
-    name: 🚀 Deploy App B
+    name: Deploy
     steps:
       - uses: actions/checkout@v4
 
@@ -48,14 +51,11 @@ jobs:
           npm ci
           npm run build
 
-      - name: Build backend package
+      - name: Prepare server artifact
         run: |
-          cd server
-          mkdir -p public
-          cp -r ../dist/* public/
-          cd ..
-          rm -f appb-package.zip
-          (cd server && zip -r ../appb-package.zip . -x "node_modules/*" ".git/*")
+          mkdir -p server/public
+          rm -rf server/public/*
+          cp -r dist/* server/public/
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
@@ -70,14 +70,15 @@ jobs:
           inlineScript: |
             set -e
             az webapp show \
-              --resource-group "${{ env.APP_B_RESOURCE_GROUP }}" \
-              --name "${{ env.APP_B_WEBAPP_NAME }}" >/dev/null
+              --resource-group "${{ env.RESOURCE_GROUP }}" \
+              --name "${{ env.WEBAPP_NAME }}" >/dev/null
             echo "Target web app found"
 
-      - name: Configure App B settings safely
+      - name: Configure app settings safely
         uses: azure/cli@v2
         with:
           inlineScript: |
+            set -e
             set_setting_if_present () {
               local key="$1"
               local value="$2"
@@ -88,53 +89,37 @@ jobs:
               fi
 
               az webapp config appsettings set \
-                --resource-group "${{ env.APP_B_RESOURCE_GROUP }}" \
-                --name "${{ env.APP_B_WEBAPP_NAME }}" \
+                --resource-group "${{ env.RESOURCE_GROUP }}" \
+                --name "${{ env.WEBAPP_NAME }}" \
                 --settings "$key=$value" >/dev/null
               echo "$key updated"
             }
+
+            az webapp config appsettings set \
+              --resource-group "${{ env.RESOURCE_GROUP }}" \
+              --name "${{ env.WEBAPP_NAME }}" \
+              --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true WEBSITE_NODE_DEFAULT_VERSION='~20' >/dev/null
 
             set_setting_if_present "N8N_WEBHOOK_URL" '${{ secrets.N8N_WEBHOOK_URL }}'
             set_setting_if_present "CORS_ORIGIN" '${{ secrets.CORS_ORIGIN }}'
             set_setting_if_present "AZURE_STORAGE_CONTAINER" '${{ secrets.AZURE_STORAGE_CONTAINER }}'
             set_setting_if_present "AZURE_STORAGE_ACCOUNT_NAME" '${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}'
 
-      - name: Deploy App B package (linux-safe zip with retry)
-        uses: azure/cli@v2
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
         with:
-          inlineScript: |
-            set -e
+          app-name: ${{ env.WEBAPP_NAME }}
+          package: ./server
 
-            deploy_once () {
-              az webapp deployment source config-zip \
-                --resource-group "${{ env.APP_B_RESOURCE_GROUP }}" \
-                --name "${{ env.APP_B_WEBAPP_NAME }}" \
-                --src appb-package.zip
-            }
-
-            if deploy_once; then
-              echo "Deployment succeeded on first attempt"
-              exit 0
-            fi
-
-            echo "First deployment attempt failed; restarting app and retrying"
-            az webapp restart \
-              --resource-group "${{ env.APP_B_RESOURCE_GROUP }}" \
-              --name "${{ env.APP_B_WEBAPP_NAME }}"
-            sleep 20
-
-            deploy_once
-            echo "Deployment succeeded on second attempt"
-
-  smoke_test_app_b:
-    needs: [deploy_app_b]
+  smoke_test:
+    needs: [deploy]
     runs-on: ubuntu-latest
-    name: 🔎 Smoke Test App B
+    name: Smoke Test
     steps:
       - name: Validate homepage
         run: |
           for i in {1..10}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ env.APP_B_WEBAPP_NAME }}.azurewebsites.net/)
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ env.WEBAPP_NAME }}.azurewebsites.net/)
             if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
               echo "Homepage check passed with status $STATUS"
               exit 0
@@ -147,7 +132,7 @@ jobs:
       - name: Validate health endpoint
         run: |
           for i in {1..10}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ env.APP_B_WEBAPP_NAME }}.azurewebsites.net/health)
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ env.WEBAPP_NAME }}.azurewebsites.net/health)
             if [ "$STATUS" = "200" ]; then
               echo "Health check passed"
               exit 0
