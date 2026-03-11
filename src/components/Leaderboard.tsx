@@ -59,7 +59,10 @@ const Leaderboard = () => {
               <span className="text-primary font-medium text-sm">{siteCopy.weekBadge || "Week 3 Rankings"}</span>
             </div>
 
-            <h1 className="font-display text-4xl md:text-6xl font-semibold mb-4 tracking-tight text-foreground">
+            <h1 
+              className="font-display text-4xl md:text-6xl font-semibold mb-4 tracking-tight text-white"
+              style={{ WebkitTextStroke: '2px black', textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}
+            >
               {siteCopy.mainTitle || "XForce Leaderboard"}
             </h1>
             <p className="text-muted-foreground text-lg max-w-md mx-auto">
