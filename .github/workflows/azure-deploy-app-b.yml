@@ -51,11 +51,6 @@ jobs:
           npm ci
           npm run build
 
-      - name: Install server dependencies (Linux)
-        run: |
-          cd server
-          npm install --omit=dev --prefer-offline
-
       - name: Prepare server artifact
         run: |
           mkdir -p server/public
@@ -103,7 +98,7 @@ jobs:
             az webapp config appsettings set \
               --resource-group "${{ env.RESOURCE_GROUP }}" \
               --name "${{ env.WEBAPP_NAME }}" \
-              --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false WEBSITE_RUN_FROM_PACKAGE=0 >/dev/null
+              --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true >/dev/null
 
             set_setting_if_present "N8N_WEBHOOK_URL" '${{ secrets.N8N_WEBHOOK_URL }}'
             set_setting_if_present "CORS_ORIGIN" '${{ secrets.CORS_ORIGIN }}'
