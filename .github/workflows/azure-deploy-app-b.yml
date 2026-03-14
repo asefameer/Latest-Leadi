@@ -57,6 +57,10 @@ jobs:
           rm -rf server/public/*
           cp -r dist/* server/public/
 
+      - name: Install server dependencies
+        working-directory: server
+        run: npm install --omit=dev
+
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
@@ -98,7 +102,7 @@ jobs:
             az webapp config appsettings set \
               --resource-group "${{ env.RESOURCE_GROUP }}" \
               --name "${{ env.WEBAPP_NAME }}" \
-              --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true >/dev/null
+              --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false >/dev/null
 
             set_setting_if_present "N8N_WEBHOOK_URL" '${{ secrets.N8N_WEBHOOK_URL }}'
             set_setting_if_present "CORS_ORIGIN" '${{ secrets.CORS_ORIGIN }}'
