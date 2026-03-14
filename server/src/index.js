@@ -5,7 +5,17 @@ import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import { chatLimiter } from "./middleware.js";
-import {
+
+// Fallback to in-memory persistence when native sqlite binding fails to load.
+let dbApi;
+try {
+  dbApi = await import("./db.js");
+} catch (error) {
+  console.error("Failed to load sqlite database, using in-memory fallback:", error);
+  dbApi = await import("./db-memory.js");
+}
+
+const {
   addMessage,
   getMessageHistory,
   closeDb,
@@ -28,7 +38,7 @@ import {
   listSiteCopy,
   addMediaAsset,
   listMediaAssets,
-} from "./db.js";
+} = dbApi;
 
 dotenv.config();
 
