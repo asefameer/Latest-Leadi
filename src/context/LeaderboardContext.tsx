@@ -236,7 +236,10 @@ export const LeaderboardProvider = ({ children }: { children: ReactNode }) => {
     const loadPublicContent = async () => {
       try {
         const backendUrl = import.meta.env.VITE_CHATBOT_BACKEND_URL || "";
-        const response = await fetch(`${backendUrl}/api/content/public`);
+        const token = localStorage.getItem("auth_token");
+        const response = await fetch(`${backendUrl}/api/content/public`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
         if (!response.ok) {
           return;
         }

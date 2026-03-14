@@ -29,19 +29,26 @@ const LeaderboardRow = ({
 }: LeaderboardRowProps) => {
   const { user } = useAuth();
   const { tsoImages } = useLeaderboard();
+  const normalize = (value?: string) => String(value || "").trim().toLowerCase();
 
   const canViewBreakdown = (() => {
     if (!user) return false;
     if (user.role === "admin") return true;
 
     if (user.role === "tso") {
-      return !!tsoData.username && user.username === tsoData.username;
+      if (normalize(tsoData.username) && normalize(user.username)) {
+        return normalize(tsoData.username) === normalize(user.username);
+      }
+      if (normalize(tsoData.territory_code) && normalize(user.territory_code)) {
+        return normalize(tsoData.territory_code) === normalize(user.territory_code);
+      }
+      return false;
     }
 
     if (user.role === "management") {
       if (user.visibility === "all") return true;
-      if (user.visibility === "only own wing") return tsoData.wing === user.display_name;
-      if (user.visibility === "only own division") return tsoData.division === user.display_name;
+      if (user.visibility === "only own wing") return normalize(tsoData.wing) === normalize(user.display_name);
+      if (user.visibility === "only own division") return normalize(tsoData.division) === normalize(user.display_name);
     }
 
     return false;

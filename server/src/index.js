@@ -144,6 +144,96 @@ const requireAdmin = (req, res, next) => {
   return next();
 };
 
+const breakdownFields = [
+  "volumeSize",
+  "memoSize",
+  "pmpd",
+  "salesPerMemo",
+  "outletReach",
+  "volumeSizePercent",
+  "memoSizePercent",
+  "pmpdPercent",
+  "salesPerMemoPercent",
+  "outletReachPercent",
+];
+
+const normalize = (value) => String(value || "").trim().toLowerCase();
+
+const resolveUserFromRequest = (req) => {
+  cleanupExpiredSessions();
+  const token = getBearerToken(req);
+  if (!token) return null;
+
+  const sessionData = getSessionWithUser(token);
+  if (!sessionData) return null;
+
+  const meta = sessionData.meta || {};
+  if (sessionData.user_type === "tso") {
+    return {
+      id: String(sessionData.user_id),
+      role: "tso",
+      username: meta.username,
+      wing: meta.wing,
+      division: meta.division,
+      territory_code: meta.territory_code,
+      territory: meta.territory,
+    };
+  }
+
+  if (sessionData.user_type === "management") {
+    return {
+      id: String(sessionData.user_id),
+      role: "management",
+      display_name: meta.display_name,
+      visibility: meta.visibility,
+    };
+  }
+
+  return {
+    id: String(sessionData.id),
+    email: sessionData.email,
+    phone: sessionData.phone,
+    role: sessionData.role,
+  };
+};
+
+const canViewBreakdown = (viewer, row) => {
+  if (!viewer) return false;
+  if (viewer.role === "admin") return true;
+
+  if (viewer.role === "management") {
+    const scope = normalize(viewer.visibility);
+    if (scope === "all") return true;
+    if (scope === "only own wing") {
+      return normalize(row.wing) === normalize(viewer.display_name);
+    }
+    if (scope === "only own division") {
+      return normalize(row.division) === normalize(viewer.display_name);
+    }
+    return false;
+  }
+
+  if (viewer.role === "tso") {
+    if (normalize(row.username) && normalize(viewer.username)) {
+      return normalize(row.username) === normalize(viewer.username);
+    }
+    if (normalize(row.territory_code) && normalize(viewer.territory_code)) {
+      return normalize(row.territory_code) === normalize(viewer.territory_code);
+    }
+    return false;
+  }
+
+  return false;
+};
+
+const redactBreakdown = (row) => {
+  const next = { ...row };
+  for (const key of breakdownFields) {
+    delete next[key];
+  }
+  return next;
+};
+
 app.post("/api/auth/signup", (req, res) => {
   const { email, phone, password } = req.body;
 
@@ -324,11 +414,42 @@ app.get("/api/admin/auth-events", requireAuth, requireAdmin, (req, res) => {
   return res.json({ events });
 });
 
-app.get("/api/content/public", (_req, res) => {
+app.get("/api/content/public", (req, res) => {
+  const viewer = resolveUserFromRequest(req);
   const settings = listContentSettings();
-  const tsoData = listLeaderboardRecords();
+  const leaderboardRows = listLeaderboardRecords();
   const siteCopy = listSiteCopy();
   const tsoImages = listTsoImages();
+
+  const tsoUsers = listTsoUsers();
+  const usersByTerritoryCode = new Map(
+    tsoUsers
+      .filter((u) => normalize(u.territory_code))
+      .map((u) => [normalize(u.territory_code), u])
+  );
+  const usersByTerritory = new Map(
+    tsoUsers
+      .filter((u) => normalize(u.territory))
+      .map((u) => [normalize(u.territory), u])
+  );
+
+  const enriched = leaderboardRows.map((row) => {
+    const byCode = usersByTerritoryCode.get(normalize(row.territory_code));
+    const byTerritory = usersByTerritory.get(normalize(row.territory));
+    const match = byCode || byTerritory;
+
+    if (!match) return row;
+
+    return {
+      ...row,
+      territory_code: row.territory_code || match.territory_code,
+      username: row.username || match.username,
+    };
+  });
+
+  const tsoData = enriched.map((row) =>
+    canViewBreakdown(viewer, row) ? row : redactBreakdown(row)
+  );
 
   return res.json({
     settings,
@@ -490,17 +611,24 @@ app.post("/api/admin/upload/mgmt-credentials", requireAuth, requireAdmin, upload
   }
 
   const records = [];
+  const allowedVisibility = new Set(["all", "only own wing", "only own division"]);
   for (let i = 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
     const vals = lines[i].split(",").map((v) => v.trim());
     const row = {};
     headers.forEach((h, idx) => { row[h] = vals[idx] || ""; });
     if (!row.User_ID || !row.Password) continue;
+    const visibility = normalize(row.Visibility || "all");
+    if (!allowedVisibility.has(visibility)) {
+      return res.status(400).json({
+        error: `Invalid Visibility '${row.Visibility}' at row ${i + 1}. Allowed: all, only own wing, only own division`,
+      });
+    }
     records.push({
       display_name: row.Display_Name,
       user_id: row.User_ID,
       password: row.Password,
-      visibility: row.Visibility || "all",
+      visibility,
     });
   }
 
