@@ -5,6 +5,8 @@ export interface TSOData {
   territory: string;
   division: string;
   wing: string;
+  territory_code?: string;
+  username?: string;
   volumeSize: number;
   memoSize: number;
   pmpd: number; // Per Man Per Day Sales
@@ -27,6 +29,8 @@ export interface CSVRow {
   "Territory": string;
   "Division": string;
   "Wing": string;
+  "Territory_Code"?: string;
+  "Username"?: string;
   "Volume Size": string;
   "Memo Size": string;
   "Per Man Per Day Sales (PMPD)": string;

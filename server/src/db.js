@@ -39,9 +39,10 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,
+    user_type TEXT NOT NULL DEFAULT 'admin',
+    meta TEXT,
     expires_at DATETIME NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id)
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS auth_events (
@@ -90,6 +91,39 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_media_assets_created_at ON media_assets(created_at);
+
+  CREATE TABLE IF NOT EXISTS tso_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    wing TEXT NOT NULL,
+    division TEXT NOT NULL,
+    territory_code TEXT NOT NULL,
+    territory TEXT NOT NULL,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    password_salt TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_tso_users_username ON tso_users(username);
+
+  CREATE TABLE IF NOT EXISTS mgmt_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    display_name TEXT NOT NULL,
+    user_id TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    password_salt TEXT NOT NULL,
+    visibility TEXT NOT NULL DEFAULT 'all',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_mgmt_users_user_id ON mgmt_users(user_id);
+
+  CREATE TABLE IF NOT EXISTS tso_images (
+    territory_code TEXT PRIMARY KEY,
+    blob_url TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 const normalizePhone = (phone) => phone.replace(/\s/g, "");
@@ -146,12 +180,12 @@ export function verifyUserPassword(user, plainPassword) {
   return timingSafeEqual(actualHash, compareHash);
 }
 
-export function createSession(userId, ttlHours = 24) {
+export function createSession(userId, ttlHours = 24, userType = "admin", meta = null) {
   const token = randomBytes(48).toString("hex");
   const stmt = db.prepare(
-    "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, datetime('now', ?))"
+    "INSERT INTO sessions (token, user_id, user_type, meta, expires_at) VALUES (?, ?, ?, ?, datetime('now', ?))"
   );
-  stmt.run(token, userId, `+${ttlHours} hours`);
+  stmt.run(token, userId, userType, meta ? JSON.stringify(meta) : null, `+${ttlHours} hours`);
   return token;
 }
 
@@ -160,19 +194,25 @@ export function getSessionWithUser(token) {
     SELECT
       s.token,
       s.user_id,
+      s.user_type,
+      s.meta,
       s.expires_at,
       u.id,
       u.email,
       u.phone,
       u.role
     FROM sessions s
-    JOIN users u ON u.id = s.user_id
+    LEFT JOIN users u ON u.id = s.user_id AND s.user_type = 'admin'
     WHERE s.token = ?
       AND datetime(s.expires_at) > datetime('now')
     LIMIT 1
   `);
 
-  return stmt.get(token);
+  const row = stmt.get(token);
+  if (!row) return null;
+
+  const metaData = row.meta ? JSON.parse(row.meta) : {};
+  return { ...row, meta: metaData };
 }
 
 export function deleteSession(token) {
@@ -321,6 +361,106 @@ export function listMediaAssets(limit = 200) {
   `);
 
   return stmt.all(limit);
+}
+
+// ─── TSO Users ─────────────────────────────────────────────────────────────
+
+export function replaceTsoUsers(records = []) {
+  const clear = db.prepare("DELETE FROM tso_users");
+  const insert = db.prepare(
+    "INSERT INTO tso_users (wing, division, territory_code, territory, username, password_hash, password_salt) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  );
+  const tx = db.transaction((rows) => {
+    clear.run();
+    for (const r of rows) {
+      const salt = randomBytes(16).toString("hex");
+      const hash = hashPassword(r.password, salt);
+      insert.run(r.wing, r.division, r.territory_code, r.territory, r.username.toLowerCase(), hash, salt);
+    }
+  });
+  tx(records);
+}
+
+export function getTsoByUsername(username) {
+  const stmt = db.prepare(
+    "SELECT id, wing, division, territory_code, territory, username, password_hash, password_salt FROM tso_users WHERE username = ?"
+  );
+  return stmt.get(username.toLowerCase());
+}
+
+export function verifyTsoPassword(tsoUser, plainPassword) {
+  if (!tsoUser?.password_hash || !tsoUser?.password_salt) return false;
+  const actual = Buffer.from(tsoUser.password_hash, "hex");
+  const compare = Buffer.from(hashPassword(plainPassword, tsoUser.password_salt), "hex");
+  if (actual.length !== compare.length) return false;
+  return timingSafeEqual(actual, compare);
+}
+
+export function listTsoUsers() {
+  const stmt = db.prepare(
+    "SELECT id, wing, division, territory_code, territory, username, created_at FROM tso_users ORDER BY username"
+  );
+  return stmt.all();
+}
+
+// ─── Management Users ───────────────────────────────────────────────────────
+
+export function replaceMgmtUsers(records = []) {
+  const clear = db.prepare("DELETE FROM mgmt_users");
+  const insert = db.prepare(
+    "INSERT INTO mgmt_users (display_name, user_id, password_hash, password_salt, visibility) VALUES (?, ?, ?, ?, ?)"
+  );
+  const tx = db.transaction((rows) => {
+    clear.run();
+    for (const r of rows) {
+      const salt = randomBytes(16).toString("hex");
+      const hash = hashPassword(r.password, salt);
+      insert.run(r.display_name, r.user_id.toLowerCase(), hash, salt, r.visibility || "all");
+    }
+  });
+  tx(records);
+}
+
+export function getMgmtByUserId(userId) {
+  const stmt = db.prepare(
+    "SELECT id, display_name, user_id, password_hash, password_salt, visibility FROM mgmt_users WHERE user_id = ?"
+  );
+  return stmt.get(userId.toLowerCase());
+}
+
+export function verifyMgmtPassword(mgmtUser, plainPassword) {
+  if (!mgmtUser?.password_hash || !mgmtUser?.password_salt) return false;
+  const actual = Buffer.from(mgmtUser.password_hash, "hex");
+  const compare = Buffer.from(hashPassword(plainPassword, mgmtUser.password_salt), "hex");
+  if (actual.length !== compare.length) return false;
+  return timingSafeEqual(actual, compare);
+}
+
+// ─── TSO Images ─────────────────────────────────────────────────────────────
+
+export function upsertTsoImage(territoryCode, blobUrl, fileName) {
+  const stmt = db.prepare(`
+    INSERT INTO tso_images (territory_code, blob_url, file_name, updated_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(territory_code) DO UPDATE SET
+      blob_url = excluded.blob_url,
+      file_name = excluded.file_name,
+      updated_at = datetime('now')
+  `);
+  stmt.run(territoryCode.toUpperCase(), blobUrl, fileName);
+}
+
+export function listTsoImages() {
+  const stmt = db.prepare("SELECT territory_code, blob_url, file_name FROM tso_images");
+  const rows = stmt.all();
+  return rows.reduce((acc, r) => {
+    acc[r.territory_code] = r.blob_url;
+    return acc;
+  }, {});
+}
+
+export function clearTsoImages() {
+  db.prepare("DELETE FROM tso_images").run();
 }
 
 function ensureDefaultAdmin() {

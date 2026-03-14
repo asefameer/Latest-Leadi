@@ -50,6 +50,8 @@ export const parseCSV = (csvText: string): TSOData[] => {
         territory: row["Territory"],
         division: row["Division"],
         wing: row["Wing"],
+        territory_code: row["Territory_Code"] || undefined,
+        username: row["Username"] || undefined,
         volumeSize: parseFloat(row["Volume Size"]) || 0,
         memoSize: parseFloat(row["Memo Size"]) || 0,
         pmpd: parseFloat(row["Per Man Per Day Sales (PMPD)"]) || 0,

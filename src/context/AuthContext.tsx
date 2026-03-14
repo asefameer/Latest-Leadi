@@ -1,11 +1,32 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-interface User {
+export type UserRole = "admin" | "viewer" | "tso" | "management";
+
+export interface AdminUser {
   id: string;
+  role: "admin" | "viewer";
   email: string;
   phone: string;
-  role: "admin" | "viewer";
 }
+
+export interface TSOUser {
+  id: string;
+  role: "tso";
+  username: string;
+  wing: string;
+  division: string;
+  territory_code: string;
+  territory: string;
+}
+
+export interface ManagementUser {
+  id: string;
+  role: "management";
+  display_name: string;
+  visibility: "all" | "only own wing" | "only own division";
+}
+
+export type User = AdminUser | TSOUser | ManagementUser;
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -13,6 +34,8 @@ interface AuthContextType {
   isLoading: boolean;
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
+  loginTSO: (username: string, password: string) => Promise<void>;
+  loginManagement: (userId: string, password: string) => Promise<void>;
   signup: (email: string, phone: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -74,6 +97,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(nextUser);
   };
 
+  const loginTSO = async (username: string, password: string) => {
+    const response = await apiRequest<{ token: string; user: TSOUser }>("/api/auth/tso-login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+    applyAuthenticatedState(response.user, response.token);
+  };
+
+  const loginManagement = async (userId: string, password: string) => {
+    const response = await apiRequest<{ token: string; user: ManagementUser }>("/api/auth/mgmt-login", {
+      method: "POST",
+      body: JSON.stringify({ userId, password }),
+    });
+    applyAuthenticatedState(response.user, response.token);
+  };
+
   useEffect(() => {
     const bootstrapAuth = async () => {
       const token = getStoredToken();
@@ -133,7 +172,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isAdmin, isLoading, user, login, signup, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isAdmin, isLoading, user, login, loginTSO, loginManagement, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

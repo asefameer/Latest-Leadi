@@ -38,6 +38,16 @@ const {
   listSiteCopy,
   addMediaAsset,
   listMediaAssets,
+  replaceTsoUsers,
+  getTsoByUsername,
+  verifyTsoPassword,
+  listTsoUsers,
+  replaceMgmtUsers,
+  getMgmtByUserId,
+  verifyMgmtPassword,
+  upsertTsoImage,
+  listTsoImages,
+  clearTsoImages,
 } = dbApi;
 
 dotenv.config();
@@ -60,12 +70,17 @@ app.use(express.json());
 app.use(cors());
 app.use(express.static(publicDir));
 
-const toSafeUser = (user) => ({
-  id: String(user.id),
-  email: user.email,
-  phone: user.phone,
-  role: user.role,
-});
+const toSafeUser = (user) => {
+  const base = {
+    id: String(user.id),
+    role: user.role,
+  };
+  if (user.role === "admin" || user.role === "viewer") {
+    base.email = user.email;
+    base.phone = user.phone;
+  }
+  return base;
+};
 
 const getBearerToken = (req) => {
   const authHeader = req.headers.authorization || "";
@@ -84,18 +99,39 @@ const requireAuth = (req, res, next) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const sessionUser = getSessionWithUser(token);
-  if (!sessionUser) {
+  const sessionData = getSessionWithUser(token);
+  if (!sessionData) {
     return res.status(401).json({ error: "Session expired or invalid" });
   }
 
   req.authToken = token;
-  req.user = {
-    id: sessionUser.id,
-    email: sessionUser.email,
-    phone: sessionUser.phone,
-    role: sessionUser.role,
-  };
+  // Build req.user for all session types
+  const meta = sessionData.meta || {};
+  if (sessionData.user_type === "tso") {
+    req.user = {
+      id: String(sessionData.user_id),
+      role: "tso",
+      username: meta.username,
+      wing: meta.wing,
+      division: meta.division,
+      territory_code: meta.territory_code,
+      territory: meta.territory,
+    };
+  } else if (sessionData.user_type === "management") {
+    req.user = {
+      id: String(sessionData.user_id),
+      role: "management",
+      display_name: meta.display_name,
+      visibility: meta.visibility,
+    };
+  } else {
+    req.user = {
+      id: String(sessionData.id),
+      email: sessionData.email,
+      phone: sessionData.phone,
+      role: sessionData.role,
+    };
+  }
 
   return next();
 };
@@ -200,7 +236,7 @@ app.post("/api/auth/login", (req, res) => {
 });
 
 app.get("/api/auth/me", requireAuth, (req, res) => {
-  return res.json({ user: toSafeUser(req.user) });
+  return res.json({ user: req.user });
 });
 
 app.post("/api/auth/logout", requireAuth, (req, res) => {
@@ -217,6 +253,69 @@ app.post("/api/auth/logout", requireAuth, (req, res) => {
   return res.json({ success: true });
 });
 
+// ─── TSO Login ───────────────────────────────────────────────────────────────
+
+app.post("/api/auth/tso-login", (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username and password are required" });
+  }
+
+  const tsoUser = getTsoByUsername(username);
+  if (!tsoUser || !verifyTsoPassword(tsoUser, password)) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  const meta = {
+    username: tsoUser.username,
+    wing: tsoUser.wing,
+    division: tsoUser.division,
+    territory_code: tsoUser.territory_code,
+    territory: tsoUser.territory,
+  };
+  const token = createSession(tsoUser.id, 24, "tso", meta);
+
+  return res.json({
+    token,
+    user: {
+      id: String(tsoUser.id),
+      role: "tso",
+      ...meta,
+    },
+  });
+});
+
+// ─── Management Login ────────────────────────────────────────────────────────
+
+app.post("/api/auth/mgmt-login", (req, res) => {
+  const { userId, password } = req.body;
+
+  if (!userId || !password) {
+    return res.status(400).json({ error: "User ID and password are required" });
+  }
+
+  const mgmtUser = getMgmtByUserId(userId);
+  if (!mgmtUser || !verifyMgmtPassword(mgmtUser, password)) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  const meta = {
+    display_name: mgmtUser.display_name,
+    visibility: mgmtUser.visibility,
+  };
+  const token = createSession(mgmtUser.id, 24, "management", meta);
+
+  return res.json({
+    token,
+    user: {
+      id: String(mgmtUser.id),
+      role: "management",
+      ...meta,
+    },
+  });
+});
+
 app.get("/api/admin/auth-events", requireAuth, requireAdmin, (req, res) => {
   const limitRaw = Number.parseInt(req.query.limit, 10);
   const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 1000) : 200;
@@ -229,11 +328,13 @@ app.get("/api/content/public", (_req, res) => {
   const settings = listContentSettings();
   const tsoData = listLeaderboardRecords();
   const siteCopy = listSiteCopy();
+  const tsoImages = listTsoImages();
 
   return res.json({
     settings,
     tsoData,
     siteCopy,
+    tsoImages,
   });
 });
 
@@ -330,6 +431,149 @@ app.put("/api/admin/content/site-copy", requireAuth, requireAdmin, (req, res) =>
 
   upsertSiteCopy(siteCopy, req.user.id);
   return res.json({ success: true });
+});
+
+// ─── TSO Credentials CSV Upload ──────────────────────────────────────────────
+
+app.post("/api/admin/upload/tso-credentials", requireAuth, requireAdmin, upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+  const csvText = req.file.buffer.toString("utf8");
+  const lines = csvText.trim().split(/\r?\n/);
+  if (lines.length < 2) return res.status(400).json({ error: "CSV must have headers and at least one row" });
+
+  const headers = lines[0].split(",").map((h) => h.trim());
+  const required = ["Wing", "Division", "Territory_Code", "Territory", "Username", "Password"];
+  for (const col of required) {
+    if (!headers.includes(col)) return res.status(400).json({ error: `Missing column: ${col}` });
+  }
+
+  const records = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const vals = lines[i].split(",").map((v) => v.trim());
+    const row = {};
+    headers.forEach((h, idx) => { row[h] = vals[idx] || ""; });
+    if (!row.Username || !row.Password) continue;
+    records.push({
+      wing: row.Wing,
+      division: row.Division,
+      territory_code: row.Territory_Code,
+      territory: row.Territory,
+      username: row.Username,
+      password: row.Password,
+    });
+  }
+
+  try {
+    replaceTsoUsers(records);
+    return res.json({ success: true, count: records.length });
+  } catch (err) {
+    console.error("TSO credentials upload error:", err);
+    return res.status(500).json({ error: "Failed to store TSO credentials" });
+  }
+});
+
+// ─── Management Credentials CSV Upload ──────────────────────────────────────
+
+app.post("/api/admin/upload/mgmt-credentials", requireAuth, requireAdmin, upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+  const csvText = req.file.buffer.toString("utf8");
+  const lines = csvText.trim().split(/\r?\n/);
+  if (lines.length < 2) return res.status(400).json({ error: "CSV must have headers and at least one row" });
+
+  const headers = lines[0].split(",").map((h) => h.trim());
+  const required = ["Display_Name", "User_ID", "Password", "Visibility"];
+  for (const col of required) {
+    if (!headers.includes(col)) return res.status(400).json({ error: `Missing column: ${col}` });
+  }
+
+  const records = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const vals = lines[i].split(",").map((v) => v.trim());
+    const row = {};
+    headers.forEach((h, idx) => { row[h] = vals[idx] || ""; });
+    if (!row.User_ID || !row.Password) continue;
+    records.push({
+      display_name: row.Display_Name,
+      user_id: row.User_ID,
+      password: row.Password,
+      visibility: row.Visibility || "all",
+    });
+  }
+
+  try {
+    replaceMgmtUsers(records);
+    return res.json({ success: true, count: records.length });
+  } catch (err) {
+    console.error("Management credentials upload error:", err);
+    return res.status(500).json({ error: "Failed to store management credentials" });
+  }
+});
+
+// ─── TSO Images ZIP Upload ───────────────────────────────────────────────────
+
+app.post("/api/admin/upload/tso-images", requireAuth, requireAdmin, upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+  const ext = req.file.originalname.split(".").pop()?.toLowerCase();
+  if (ext !== "zip") {
+    return res.status(400).json({ error: "Only ZIP files are supported" });
+  }
+
+  let unzipper;
+  try {
+    unzipper = await import("unzipper");
+  } catch {
+    return res.status(500).json({ error: "ZIP processing not available" });
+  }
+
+  let uploadModule;
+  try {
+    uploadModule = await import("./storage.js");
+  } catch (err) {
+    console.error("Storage not available:", err);
+    return res.status(500).json({ error: "Storage not available" });
+  }
+  const { uploadToBlob } = uploadModule;
+
+  try {
+    clearTsoImages();
+    const directory = await unzipper.Open.buffer(req.file.buffer);
+    const results = { uploaded: 0, skipped: 0 };
+    const imageExts = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
+
+    for (const file of directory.files) {
+      if (file.type !== "File") continue;
+      const baseName = file.path.split("/").pop();
+      if (!baseName) continue;
+      const dotIdx = baseName.lastIndexOf(".");
+      if (dotIdx === -1) { results.skipped++; continue; }
+      const fileExt = baseName.slice(dotIdx + 1).toLowerCase();
+      if (!imageExts.includes(fileExt)) { results.skipped++; continue; }
+      const territoryCode = baseName.slice(0, dotIdx).toUpperCase();
+      if (!territoryCode) { results.skipped++; continue; }
+
+      const buffer = await file.buffer();
+      const mimeMap = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
+
+      const uploaded = await uploadToBlob({
+        buffer,
+        originalName: `tso-image-${territoryCode}.${fileExt}`,
+        mimeType: mimeMap[fileExt] || "image/jpeg",
+      });
+
+      upsertTsoImage(territoryCode, uploaded.url, baseName);
+      results.uploaded++;
+    }
+
+    return res.json({ success: true, ...results });
+  } catch (err) {
+    console.error("TSO images upload error:", err);
+    return res.status(500).json({ error: "Failed to process ZIP file" });
+  }
 });
 
 // Health check

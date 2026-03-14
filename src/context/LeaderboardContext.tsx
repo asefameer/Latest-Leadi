@@ -198,6 +198,8 @@ const initialTSOData: TSOData[] = [
 interface LeaderboardContextType {
   tsoData: TSOData[];
   setTsoData: React.Dispatch<React.SetStateAction<TSOData[]>>;
+  tsoImages: Record<string, string>;
+  setTsoImages: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   config: LeaderboardConfig;
   setConfig: React.Dispatch<React.SetStateAction<LeaderboardConfig>>;
   logo: string; // Logo image URL or base64
@@ -217,6 +219,7 @@ const LeaderboardContext = createContext<LeaderboardContextType | undefined>(und
 
 export const LeaderboardProvider = ({ children }: { children: ReactNode }) => {
   const [tsoData, setTsoData] = useState<TSOData[]>(initialTSOData);
+  const [tsoImages, setTsoImages] = useState<Record<string, string>>({});
   const [config, setConfig] = useState<LeaderboardConfig>({ weekNumber: 12 });
   const [logo, setLogo] = useState<string>("");
   const [backgroundMedia, setBackgroundMedia] = useState<string>("");
@@ -242,6 +245,10 @@ export const LeaderboardProvider = ({ children }: { children: ReactNode }) => {
 
         if (Array.isArray(data.tsoData) && data.tsoData.length > 0) {
           setTsoData(data.tsoData);
+        }
+
+        if (data.tsoImages && typeof data.tsoImages === "object") {
+          setTsoImages(data.tsoImages as Record<string, string>);
         }
 
         if (data.settings?.logoUrl) {
@@ -290,6 +297,8 @@ export const LeaderboardProvider = ({ children }: { children: ReactNode }) => {
       value={{
         tsoData,
         setTsoData,
+        tsoImages,
+        setTsoImages,
         config,
         setConfig,
         logo,

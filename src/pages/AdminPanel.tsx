@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Upload, Trash2, Image as ImageIcon, ArrowLeft, LogOut, Download, Settings } from "lucide-react";
+import { Upload, Trash2, Image as ImageIcon, ArrowLeft, LogOut, Download, Users, Shield } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import aktLogo from "@/assets/akt-logo.png";
@@ -35,6 +35,9 @@ const AdminPanel = () => {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [uploadingImageId, setUploadingImageId] = useState<string | null>(null);
+  const [uploadingTsoCreds, setUploadingTsoCreds] = useState(false);
+  const [uploadingMgmtCreds, setUploadingMgmtCreds] = useState(false);
+  const [uploadingTsoImages, setUploadingTsoImages] = useState(false);
   const backendUrl = import.meta.env.VITE_CHATBOT_BACKEND_URL || "";
   const [authEvents, setAuthEvents] = useState<Array<{
     id: number;
@@ -197,6 +200,93 @@ const AdminPanel = () => {
     }
   };
 
+  const handleTsoCredentialsUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const token = getAuthToken();
+    if (!token) {
+      toast.error("Authentication required");
+      return;
+    }
+
+    setUploadingTsoCreds(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`${backendUrl}/api/admin/upload/tso-credentials`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Upload failed");
+      toast.success(`Imported ${data.count} TSO credentials`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to upload TSO credentials");
+    } finally {
+      setUploadingTsoCreds(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleMgmtCredentialsUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const token = getAuthToken();
+    if (!token) {
+      toast.error("Authentication required");
+      return;
+    }
+
+    setUploadingMgmtCreds(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`${backendUrl}/api/admin/upload/mgmt-credentials`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Upload failed");
+      toast.success(`Imported ${data.count} management credentials`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to upload management credentials");
+    } finally {
+      setUploadingMgmtCreds(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleTsoImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const token = getAuthToken();
+    if (!token) {
+      toast.error("Authentication required");
+      return;
+    }
+
+    setUploadingTsoImages(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`${backendUrl}/api/admin/upload/tso-images`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Upload failed");
+      toast.success(`Uploaded ${data.uploaded} TSO images (${data.skipped} skipped)`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to upload TSO images");
+    } finally {
+      setUploadingTsoImages(false);
+      e.target.value = "";
+    }
+  };
+
   const handleBackgroundMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -278,6 +368,12 @@ const AdminPanel = () => {
 
   // Sort by overall percent
   const sortedTsoData = [...tsoData].sort((a, b) => b.overallPercent - a.overallPercent);
+  const userLabel =
+    user?.role === "tso"
+      ? user.username
+      : user?.role === "management"
+      ? user.display_name
+      : user?.email || "Unknown";
 
   return (
     <div className="min-h-screen bg-background">
@@ -305,8 +401,10 @@ const AdminPanel = () => {
           <div className="flex items-center gap-4 ml-auto">
             <div className="text-right">
               <p className="text-sm font-medium text-foreground">User</p>
-              <p className="text-xs text-muted-foreground">{user?.email}</p>
-              <p className="text-xs text-muted-foreground">{user?.phone}</p>
+              <p className="text-xs text-muted-foreground">{userLabel}</p>
+              {user?.role !== "tso" && user?.role !== "management" && user?.phone ? (
+                <p className="text-xs text-muted-foreground">{user.phone}</p>
+              ) : null}
             </div>
             <Button
               variant="outline"
@@ -355,6 +453,104 @@ const AdminPanel = () => {
                 Download Template
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* TSO Credentials CSV Upload */}
+        <Card className="bg-card border-border mb-8">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              TSO Credentials
+            </CardTitle>
+            <CardDescription>
+              Upload TSO login credentials CSV (columns: Wing, Division, Territory_Code, Territory, Username, Password)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Label htmlFor="tso-creds-upload" className="cursor-pointer">
+              <div className={`flex items-center justify-center w-full px-6 py-4 border-2 border-dashed rounded-lg transition-colors ${uploadingTsoCreds ? "opacity-50 cursor-not-allowed border-border" : "border-border hover:border-primary/50"}`}>
+                <div className="text-center">
+                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="font-medium text-foreground">{uploadingTsoCreds ? "Uploading..." : "Click to upload TSO Credentials CSV"}</p>
+                  <p className="text-sm text-muted-foreground">Replaces all existing TSO login accounts</p>
+                </div>
+              </div>
+              <input
+                id="tso-creds-upload"
+                type="file"
+                accept=".csv"
+                onChange={handleTsoCredentialsUpload}
+                disabled={uploadingTsoCreds}
+                className="hidden"
+              />
+            </Label>
+          </CardContent>
+        </Card>
+
+        {/* Management Credentials CSV Upload */}
+        <Card className="bg-card border-border mb-8">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Management Credentials
+            </CardTitle>
+            <CardDescription>
+              Upload management login credentials CSV (columns: Display_Name, User_ID, Password, Visibility)
+              <br />
+              <span className="text-xs">Visibility values: <code>all</code> | <code>only own wing</code> | <code>only own division</code></span>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Label htmlFor="mgmt-creds-upload" className="cursor-pointer">
+              <div className={`flex items-center justify-center w-full px-6 py-4 border-2 border-dashed rounded-lg transition-colors ${uploadingMgmtCreds ? "opacity-50 cursor-not-allowed border-border" : "border-border hover:border-primary/50"}`}>
+                <div className="text-center">
+                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="font-medium text-foreground">{uploadingMgmtCreds ? "Uploading..." : "Click to upload Management Credentials CSV"}</p>
+                  <p className="text-sm text-muted-foreground">Replaces all existing management accounts</p>
+                </div>
+              </div>
+              <input
+                id="mgmt-creds-upload"
+                type="file"
+                accept=".csv"
+                onChange={handleMgmtCredentialsUpload}
+                disabled={uploadingMgmtCreds}
+                className="hidden"
+              />
+            </Label>
+          </CardContent>
+        </Card>
+
+        {/* TSO Images ZIP Upload */}
+        <Card className="bg-card border-border mb-8">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <ImageIcon className="h-5 w-5" />
+              TSO Territory Images (ZIP)
+            </CardTitle>
+            <CardDescription>
+              Upload a ZIP file containing TSO territory images. Filenames must match Territory_Code (e.g. <code>DHK001.png</code>).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Label htmlFor="tso-images-upload" className="cursor-pointer">
+              <div className={`flex items-center justify-center w-full px-6 py-4 border-2 border-dashed rounded-lg transition-colors ${uploadingTsoImages ? "opacity-50 cursor-not-allowed border-border" : "border-border hover:border-primary/50"}`}>
+                <div className="text-center">
+                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="font-medium text-foreground">{uploadingTsoImages ? "Processing ZIP..." : "Click to upload images ZIP"}</p>
+                  <p className="text-sm text-muted-foreground">PNG, JPG, GIF, WebP supported — filenames = Territory_Code</p>
+                </div>
+              </div>
+              <input
+                id="tso-images-upload"
+                type="file"
+                accept=".zip"
+                onChange={handleTsoImagesUpload}
+                disabled={uploadingTsoImages}
+                className="hidden"
+              />
+            </Label>
           </CardContent>
         </Card>
 

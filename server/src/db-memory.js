@@ -4,6 +4,8 @@ let userSeq = 1;
 let authEventSeq = 1;
 let mediaAssetSeq = 1;
 let messageSeq = 1;
+let tsoUserSeq = 1;
+let mgmtUserSeq = 1;
 
 const users = [];
 const sessions = new Map();
@@ -13,6 +15,9 @@ const leaderboardRecords = new Map();
 const siteCopy = new Map();
 const mediaAssets = [];
 const chatMessages = [];
+const tsoUsers = [];
+const mgmtUsers = [];
+const tsoImages = new Map(); // territory_code → blob_url
 
 const normalizePhone = (phone) => String(phone || "").replace(/\s/g, "");
 
@@ -94,35 +99,45 @@ export function verifyUserPassword(user, plainPassword) {
   return timingSafeEqual(actualHash, compareHash);
 }
 
-export function createSession(userId, ttlHours = 24) {
+export function createSession(userId, ttlHours = 24, userType = "admin", meta = null) {
   const token = randomBytes(48).toString("hex");
   const expiresAt = Date.now() + ttlHours * 60 * 60 * 1000;
-  sessions.set(token, { token, user_id: Number(userId), expiresAt, createdAt: nowIso() });
+  sessions.set(token, { token, user_id: Number(userId), userType, meta: meta || {}, expiresAt, createdAt: nowIso() });
   return token;
 }
 
 export function getSessionWithUser(token) {
   const session = sessions.get(token);
   if (!session || session.expiresAt <= Date.now()) {
-    if (session) {
-      sessions.delete(token);
-    }
+    if (session) sessions.delete(token);
     return null;
   }
 
-  const user = users.find((u) => u.id === session.user_id);
-  if (!user) {
-    return null;
+  let id, email, phone, role;
+  if (session.userType === "admin") {
+    const user = users.find((u) => u.id === session.user_id);
+    if (!user) return null;
+    id = user.id;
+    email = user.email;
+    phone = user.phone;
+    role = user.role;
+  } else {
+    id = session.user_id;
+    email = null;
+    phone = null;
+    role = session.userType;
   }
 
   return {
     token: session.token,
     user_id: session.user_id,
+    user_type: session.userType,
+    meta: session.meta,
     expires_at: new Date(session.expiresAt).toISOString(),
-    id: user.id,
-    email: user.email,
-    phone: user.phone,
-    role: user.role,
+    id,
+    email,
+    phone,
+    role,
   };
 }
 
@@ -239,6 +254,92 @@ export function getMessageHistory(userId, limit = 50) {
 
 export function closeDb() {
   // no-op for in-memory fallback
+}
+
+// ─── TSO Users ─────────────────────────────────────────────────────────────
+
+const hashPwd = (password, salt) => scryptSync(password, salt, 64).toString("hex");
+
+export function replaceTsoUsers(records = []) {
+  tsoUsers.length = 0;
+  tsoUserSeq = 1;
+  for (const r of records) {
+    const salt = randomBytes(16).toString("hex");
+    const hash = hashPwd(r.password, salt);
+    tsoUsers.push({
+      id: tsoUserSeq++,
+      wing: r.wing,
+      division: r.division,
+      territory_code: r.territory_code,
+      territory: r.territory,
+      username: r.username.toLowerCase(),
+      password_hash: hash,
+      password_salt: salt,
+      created_at: nowIso(),
+    });
+  }
+}
+
+export function getTsoByUsername(username) {
+  return tsoUsers.find((u) => u.username === username.toLowerCase()) || null;
+}
+
+export function verifyTsoPassword(tsoUser, plainPassword) {
+  if (!tsoUser?.password_hash || !tsoUser?.password_salt) return false;
+  const actual = Buffer.from(tsoUser.password_hash, "hex");
+  const compare = Buffer.from(hashPwd(plainPassword, tsoUser.password_salt), "hex");
+  if (actual.length !== compare.length) return false;
+  return timingSafeEqual(actual, compare);
+}
+
+export function listTsoUsers() {
+  return tsoUsers.map(({ password_hash, password_salt, ...u }) => u);
+}
+
+// ─── Management Users ───────────────────────────────────────────────────────
+
+export function replaceMgmtUsers(records = []) {
+  mgmtUsers.length = 0;
+  mgmtUserSeq = 1;
+  for (const r of records) {
+    const salt = randomBytes(16).toString("hex");
+    const hash = hashPwd(r.password, salt);
+    mgmtUsers.push({
+      id: mgmtUserSeq++,
+      display_name: r.display_name,
+      user_id: r.user_id.toLowerCase(),
+      password_hash: hash,
+      password_salt: salt,
+      visibility: r.visibility || "all",
+      created_at: nowIso(),
+    });
+  }
+}
+
+export function getMgmtByUserId(userId) {
+  return mgmtUsers.find((u) => u.user_id === userId.toLowerCase()) || null;
+}
+
+export function verifyMgmtPassword(mgmtUser, plainPassword) {
+  if (!mgmtUser?.password_hash || !mgmtUser?.password_salt) return false;
+  const actual = Buffer.from(mgmtUser.password_hash, "hex");
+  const compare = Buffer.from(hashPwd(plainPassword, mgmtUser.password_salt), "hex");
+  if (actual.length !== compare.length) return false;
+  return timingSafeEqual(actual, compare);
+}
+
+// ─── TSO Images ─────────────────────────────────────────────────────────────
+
+export function upsertTsoImage(territoryCode, blobUrl, _fileName) {
+  tsoImages.set(territoryCode.toUpperCase(), blobUrl);
+}
+
+export function listTsoImages() {
+  return Object.fromEntries(tsoImages.entries());
+}
+
+export function clearTsoImages() {
+  tsoImages.clear();
 }
 
 if (!getUserByEmail("admin@topperformers.com")) {
