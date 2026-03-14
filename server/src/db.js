@@ -1,10 +1,17 @@
 import Database from "better-sqlite3";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.join(__dirname, "..", "chatbot.db");
+// Use the persistent /home volume on Azure App Service so data survives
+// deployments. Fall back to a local path for non-Azure environments.
+const dbDir = process.env.HOME
+  ? path.join(process.env.HOME, "data")
+  : path.join(__dirname, "..");
+fs.mkdirSync(dbDir, { recursive: true });
+const dbPath = process.env.DB_PATH || path.join(dbDir, "chatbot.db");
 
 const db = new Database(dbPath);
 

@@ -1,0 +1,9 @@
+<step title="Incoming Request" date="2026-03-13T22:47:47.187" instance="19f3c2" url="/api/deployments/latest?deployer=OneDeploy&amp;time=2026-03-13_22-42-41Z" method="GET" type="request" pid="835,1,15" Host="leadi-portal-app-8n7.scm.azurewebsites.net" User-Agent="GITHUBACTIONS_DeployWebAppToAzure_6770437b23a4bba10a8bdaadd25b61c7c36e73dabbf2c3099c1982f8c8fdadc5_v3.0.7" Authorization="Bea..." Content-Type="application/json; charset=utf-8" Cookie="ARRAffinity=19f3c2d838f343cdc0c3a129b1af493839d965975c6083e7ec6a660f8ccdf538; ARRAffinitySameSite=19f3c2d838f343cdc0c3a129b1af493839d965975c6083e7ec6a660f8ccdf538" Content-Length="0" X-ARR-LOG-ID="b705a384-3841-4931-a6f2-e8a97b28ae48" CLIENT-IP="128.24.160.248:20506" X-SITE-DEPLOYMENT-ID="leadi-portal-app-8n7" WAS-DEFAULT-HOSTNAME="leadi-portal-app-8n7.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/deployments/latest?deployer=OneDeploy&amp;time=2026-03-13_22-42-41Z" X-Client-IP="128.24.160.248" X-Client-Port="20506" >
+  <step title="Cleanup Xml Logs" date="2026-03-13T22:47:47.200" /><!-- duration: 563ms -->
+  <step title="DeploymentService.GetResult" date="2026-03-13T22:47:47.982" >
+    <step title="DeploymentService.GetLatestDeployment" date="2026-03-13T22:47:48.152" >
+      <step title="DeploymentManager.GetResults" date="2026-03-13T22:47:48.185" /><!-- duration: 1657ms -->
+    </step><!-- duration: 1772ms -->
+  </step><!-- duration: 2044ms -->
+  <step title="Outgoing response" date="2026-03-13T22:47:50.147" type="response" statusCode="202" statusText="Accepted" /><!-- duration: 37ms -->
+</step><!-- duration: 3000ms -->

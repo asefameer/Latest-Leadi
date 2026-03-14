@@ -59,7 +59,7 @@ jobs:
 
       - name: Install server dependencies (Linux runner)
         working-directory: server
-        run: npm install --omit=dev
+        run: npm ci --omit=dev
 
       - name: Package server artifact
         run: |
@@ -109,7 +109,6 @@ jobs:
               --name "${{ env.WEBAPP_NAME }}" \
               --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false ENABLE_ORYX_BUILD=false >/dev/null
 
-            set_setting_if_present "N8N_WEBHOOK_URL" '${{ secrets.APP_B_N8N_WEBHOOK_URL }}'
             set_setting_if_present "CORS_ORIGIN" '${{ secrets.APP_B_CORS_ORIGIN }}'
             set_setting_if_present "AZURE_STORAGE_CONTAINER" '${{ secrets.APP_B_AZURE_STORAGE_CONTAINER }}'
             set_setting_if_present "AZURE_STORAGE_ACCOUNT_NAME" '${{ secrets.APP_B_AZURE_STORAGE_ACCOUNT_NAME }}'
