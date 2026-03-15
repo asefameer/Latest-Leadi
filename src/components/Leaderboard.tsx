@@ -60,8 +60,7 @@ const Leaderboard = () => {
             </div>
 
             <h1 
-              className="font-display text-4xl md:text-6xl font-semibold mb-4 tracking-tight text-white"
-              style={{ WebkitTextStroke: '2px black', textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}
+              className="inline-block px-4 py-2 rounded-xl bg-background/70 backdrop-blur-sm font-display text-4xl md:text-6xl font-semibold mb-4 tracking-tight text-foreground"
             >
               {siteCopy.mainTitle || "XForce Leaderboard"}
             </h1>

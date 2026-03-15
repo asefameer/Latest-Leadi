@@ -651,7 +651,7 @@ app.post("/api/admin/upload/tso-images", requireAuth, requireAdmin, upload.singl
 
   const ext = req.file.originalname.split(".").pop()?.toLowerCase();
   if (ext !== "zip") {
-    return res.status(400).json({ error: "Only ZIP files are supported" });
+    return res.status(400).json({ error: "Please upload a ZIP file (zipped folder)" });
   }
 
   let unzipper;
@@ -677,13 +677,17 @@ app.post("/api/admin/upload/tso-images", requireAuth, requireAdmin, upload.singl
 
     for (const file of directory.files) {
       if (file.type !== "File") continue;
-      const baseName = file.path.split("/").pop();
+      const pathParts = String(file.path || "").split(/[\\/]+/).filter(Boolean);
+      const baseName = pathParts[pathParts.length - 1];
       if (!baseName) continue;
       const dotIdx = baseName.lastIndexOf(".");
       if (dotIdx === -1) { results.skipped++; continue; }
       const fileExt = baseName.slice(dotIdx + 1).toLowerCase();
       if (!imageExts.includes(fileExt)) { results.skipped++; continue; }
-      const territoryCode = baseName.slice(0, dotIdx).toUpperCase();
+      const parentFolder = pathParts.length > 1 ? pathParts[pathParts.length - 2] : "";
+      const fromFile = baseName.slice(0, dotIdx).trim();
+      const fromFolder = String(parentFolder || "").trim();
+      const territoryCode = (fromFolder || fromFile).toUpperCase();
       if (!territoryCode) { results.skipped++; continue; }
 
       const buffer = await file.buffer();
@@ -707,6 +711,13 @@ app.post("/api/admin/upload/tso-images", requireAuth, requireAdmin, upload.singl
 
       upsertTsoImage(territoryCode, imageUrl, baseName);
       results.uploaded++;
+    }
+
+    if (results.uploaded === 0) {
+      return res.status(400).json({
+        error: "No valid images found in ZIP folder. Use DHK001.png or DHK001/photo.png style naming.",
+        ...results,
+      });
     }
 
     return res.json({ success: true, ...results });

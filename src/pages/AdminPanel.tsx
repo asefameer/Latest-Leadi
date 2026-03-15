@@ -421,7 +421,7 @@ const AdminPanel = () => {
         {/* CSV Upload Section */}
         <Card className="bg-card border-border mb-8">
           <CardHeader>
-            <CardTitle className="text-white">CSV Upload</CardTitle>
+            <CardTitle className="text-foreground">CSV Upload</CardTitle>
             <CardDescription>Import TSO data from CSV file</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -459,7 +459,7 @@ const AdminPanel = () => {
         {/* TSO Credentials CSV Upload */}
         <Card className="bg-card border-border mb-8">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="text-foreground flex items-center gap-2">
               <Users className="h-5 w-5" />
               TSO Credentials
             </CardTitle>
@@ -491,7 +491,7 @@ const AdminPanel = () => {
         {/* Management Credentials CSV Upload */}
         <Card className="bg-card border-border mb-8">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="text-foreground flex items-center gap-2">
               <Shield className="h-5 w-5" />
               Management Credentials
             </CardTitle>
@@ -522,15 +522,15 @@ const AdminPanel = () => {
           </CardContent>
         </Card>
 
-        {/* TSO Images ZIP Upload */}
+        {/* TSO Territory ZIP Folder Upload */}
         <Card className="bg-card border-border mb-8">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="text-foreground flex items-center gap-2">
               <ImageIcon className="h-5 w-5" />
-              TSO Territory Images (ZIP)
+              TSO Territory Folder (ZIP)
             </CardTitle>
             <CardDescription>
-              Upload a ZIP file containing TSO territory images. Filenames must match Territory_Code (e.g. <code>DHK001.png</code>).
+              Upload a zipped folder of territory images. Supported patterns: <code>DHK001.png</code> or <code>DHK001/photo.png</code>.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -538,8 +538,8 @@ const AdminPanel = () => {
               <div className={`flex items-center justify-center w-full px-6 py-4 border-2 border-dashed rounded-lg transition-colors ${uploadingTsoImages ? "opacity-50 cursor-not-allowed border-border" : "border-border hover:border-primary/50"}`}>
                 <div className="text-center">
                   <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                  <p className="font-medium text-foreground">{uploadingTsoImages ? "Processing ZIP..." : "Click to upload images ZIP"}</p>
-                  <p className="text-sm text-muted-foreground">PNG, JPG, GIF, WebP supported — filenames = Territory_Code</p>
+                  <p className="font-medium text-foreground">{uploadingTsoImages ? "Processing ZIP folder..." : "Click to upload zipped folder"}</p>
+                  <p className="text-sm text-muted-foreground">PNG, JPG, GIF, WebP, SVG supported</p>
                 </div>
               </div>
               <input
@@ -556,7 +556,7 @@ const AdminPanel = () => {
 
         <Card className="bg-card border-border mb-8">
           <CardHeader>
-            <CardTitle className="text-white">User Signup/Login Activity</CardTitle>
+            <CardTitle className="text-foreground">User Signup/Login Activity</CardTitle>
             <CardDescription>Latest authentication events across all users</CardDescription>
           </CardHeader>
           <CardContent>
@@ -590,7 +590,7 @@ const AdminPanel = () => {
         {/* TSO List with Image Upload */}
         <Card className="bg-card border-border mb-8">
           <CardHeader>
-            <CardTitle className="text-white">Logo Settings</CardTitle>
+            <CardTitle className="text-foreground">Logo Settings</CardTitle>
             <CardDescription>Upload a logo to display at the top of the leaderboard</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -627,7 +627,7 @@ const AdminPanel = () => {
         {/* Background Media Upload */}
         <Card className="bg-card border-border mb-8">
           <CardHeader>
-            <CardTitle className="text-white">Background Media</CardTitle>
+            <CardTitle className="text-foreground">Background Media</CardTitle>
             <CardDescription>Upload an image, GIF, or video for the leaderboard background (50% opacity)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -678,7 +678,7 @@ const AdminPanel = () => {
 
         <Card className="bg-card border-border mb-8">
           <CardHeader>
-            <CardTitle className="text-white">Frontend Text Editor</CardTitle>
+            <CardTitle className="text-foreground">Frontend Text Editor</CardTitle>
             <CardDescription>Update visible text for normal users</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -729,7 +729,7 @@ const AdminPanel = () => {
         {/* TSO List with Image Upload */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-white">TSO Management</CardTitle>
+            <CardTitle className="text-foreground">TSO Management</CardTitle>
             <CardDescription>Upload images and manage TSO information ({tsoData.length} total)</CardDescription>
           </CardHeader>
           <CardContent>
