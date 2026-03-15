@@ -522,15 +522,15 @@ const AdminPanel = () => {
           </CardContent>
         </Card>
 
-        {/* TSO Territory ZIP Folder Upload */}
+        {/* TSO Territory Compressed Folder Upload */}
         <Card className="bg-card border-border mb-8">
           <CardHeader>
             <CardTitle className="text-foreground flex items-center gap-2">
               <ImageIcon className="h-5 w-5" />
-              TSO Territory Folder (ZIP)
+              TSO Territory Images (Compressed Folder)
             </CardTitle>
             <CardDescription>
-              Upload a zipped folder of territory images. Supported patterns: <code>DHK001.png</code> or <code>DHK001/photo.png</code>.
+              Upload a compressed (zipped) folder of territory images. Supported patterns: <code>DHK001.png</code> or <code>DHK001/photo.png</code>.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -538,7 +538,7 @@ const AdminPanel = () => {
               <div className={`flex items-center justify-center w-full px-6 py-4 border-2 border-dashed rounded-lg transition-colors ${uploadingTsoImages ? "opacity-50 cursor-not-allowed border-border" : "border-border hover:border-primary/50"}`}>
                 <div className="text-center">
                   <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                  <p className="font-medium text-foreground">{uploadingTsoImages ? "Processing ZIP folder..." : "Click to upload zipped folder"}</p>
+                  <p className="font-medium text-foreground">{uploadingTsoImages ? "Processing compressed (zipped) folder..." : "Click to upload compressed (zipped) folder"}</p>
                   <p className="text-sm text-muted-foreground">PNG, JPG, GIF, WebP, SVG supported</p>
                 </div>
               </div>

@@ -644,14 +644,14 @@ app.post("/api/admin/upload/mgmt-credentials", requireAuth, requireAdmin, upload
   }
 });
 
-// ─── TSO Images ZIP Upload ───────────────────────────────────────────────────
+// ─── TSO Images Compressed Folder Upload ─────────────────────────────────────
 
 app.post("/api/admin/upload/tso-images", requireAuth, requireAdmin, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
   const ext = req.file.originalname.split(".").pop()?.toLowerCase();
   if (ext !== "zip") {
-    return res.status(400).json({ error: "Please upload a ZIP file (zipped folder)" });
+    return res.status(400).json({ error: "Please upload a compressed (zipped) folder (.zip)" });
   }
 
   let unzipper;
@@ -715,7 +715,7 @@ app.post("/api/admin/upload/tso-images", requireAuth, requireAdmin, upload.singl
 
     if (results.uploaded === 0) {
       return res.status(400).json({
-        error: "No valid images found in ZIP folder. Use DHK001.png or DHK001/photo.png style naming.",
+        error: "No valid images found in the compressed (zipped) folder. Use DHK001.png or DHK001/photo.png style naming.",
         ...results,
       });
     }
